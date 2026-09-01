@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Campus Wish Wall</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --bg-void:#08080f;
+    --bg-panel:#0d0d16;
+    --text-primary:#ece8e0;
+    --text-muted:#8b889a;
+    --accent:#f2b569;
+    --accent-soft:rgba(242,181,105,0.35);
+    --border-subtle:rgba(255,255,255,0.09);
+    --font-display:'Fraunces', Georgia, serif;
+    --font-body:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;padding:0;overflow:hidden;background:var(--bg-void);color:var(--text-primary);font-family:var(--font-body);}
+
+  #canvas-container{position:fixed;inset:0;z-index:0;}
+  #canvas-container canvas{display:block;}
+
+  #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:5;font-family:var(--font-display);font-style:italic;font-size:1.1rem;color:var(--text-muted);letter-spacing:0.02em;transition:opacity .6s ease;}
+  #loading.hidden{opacity:0;pointer-events:none;}
+  @media (prefers-reduced-motion:no-preference){ #loading{animation:pulse 2.4s ease-in-out infinite;} }
+  @keyframes pulse{0%,100%{opacity:.5;}50%{opacity:1;}}
+
+  #topbar{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:1.5rem 2rem;z-index:10;pointer-events:none;}
+  #topbar > *{pointer-events:auto;}
+  .wordmark{font-family:var(--font-display);font-style:italic;font-size:1.15rem;color:var(--text-primary);letter-spacing:.01em;}
+
+  .btn-outline{background:transparent;border:1px solid var(--accent-soft);color:var(--text-primary);font-family:var(--font-body);font-size:.9rem;padding:.55rem 1.1rem;border-radius:2px;cursor:pointer;transition:border-color .25s ease,background .25s ease;}
+  .btn-outline:hover{border-color:var(--accent);background:rgba(242,181,105,.08);}
+  .btn-outline:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+  .btn-solid{background:var(--accent);color:#1a1204;border:none;font-family:var(--font-body);font-weight:600;font-size:.9rem;padding:.7rem 1.3rem;border-radius:2px;cursor:pointer;width:100%;margin-top:.75rem;transition:filter .2s ease;}
+  .btn-solid:hover{filter:brightness(1.08);}
+  .btn-solid:disabled{opacity:.5;cursor:default;}
+  .btn-solid:focus-visible{outline:2px solid var(--text-primary);outline-offset:2px;}
+
+  #hint{position:fixed;bottom:1.75rem;left:2rem;z-index:10;font-size:.8rem;color:var(--text-muted);pointer-events:none;max-width:70vw;}
+
+  #backdrop{position:fixed;inset:0;background:rgba(4,4,8,0.55);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .3s ease;z-index:15;}
+  #backdrop.show{opacity:1;pointer-events:auto;}
+
+  .close-btn{position:absolute;top:1.1rem;right:1.1rem;background:none;border:none;color:var(--text-muted);font-size:1.4rem;line-height:1;cursor:pointer;padding:.25rem .5rem;}
+  .close-btn:hover{color:var(--text-primary);}
+  .close-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+  #compose-panel,#view-panel{position:fixed;z-index:20;background:var(--bg-panel);border:1px solid var(--border-subtle);}
+
+  #compose-panel{left:50%;bottom:0;transform:translate(-50%,110%);width:min(92vw,440px);padding:2rem 1.75rem 1.75rem;border-radius:14px 14px 0 0;transition:transform .35s cubic-bezier(.2,.8,.2,1);max-height:85vh;overflow-y:auto;}
+  #compose-panel.open{transform:translate(-50%,0);}
+
+  #view-panel{top:0;right:0;bottom:0;width:min(92vw,400px);padding:3.5rem 1.75rem 1.75rem;transform:translateX(105%);transition:transform .35s cubic-bezier(.2,.8,.2,1);border-left:1px solid var(--border-subtle);border-top:none;border-right:none;border-bottom:none;overflow-y:auto;}
+  #view-panel.open{transform:translateX(0);}
+
+  h2{font-family:var(--font-display);font-weight:600;font-size:1.4rem;margin:0 0 .35rem;}
+  .panel-sub{color:var(--text-muted);font-size:.85rem;margin:0 0 1.5rem;}
+
+  label{display:block;font-size:.78rem;color:var(--text-muted);margin:1rem 0 .4rem;}
+  input[type=text],textarea{width:100%;background:rgba(255,255,255,.03);border:1px solid var(--border-subtle);color:var(--text-primary);font-family:var(--font-body);font-size:.92rem;padding:.7rem .8rem;border-radius:2px;resize:vertical;}
+  input[type=text]:focus-visible,textarea:focus-visible{outline:none;border-color:var(--accent);}
+  textarea{min-height:80px;}
+
+  .error-text{color:#e8907a;font-size:.8rem;margin-top:.6rem;}
+
+  .wish-meta{font-size:.8rem;color:var(--text-muted);margin:0 0 1rem;}
+  .wish-text{font-family:var(--font-display);font-size:1.25rem;line-height:1.5;margin:0 0 2rem;}
+
+  .replies{border-top:1px solid var(--border-subtle);padding-top:1.25rem;margin-bottom:1.25rem;}
+  .no-replies{color:var(--text-muted);font-size:.85rem;}
+  .reply-item{margin-bottom:1rem;}
+  .reply-meta{font-size:.72rem;color:var(--text-muted);margin:0 0 .2rem;}
+  .reply-body{font-size:.88rem;line-height:1.5;margin:0;}
+
+  .reply-compose{border-top:1px solid var(--border-subtle);padding-top:1.25rem;}
+
+  @media (max-width:520px){
+    #view-panel{width:100vw;padding-top:3.5rem;}
+    #compose-panel{width:100vw;border-radius:0;}
+  }
+</style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="loading">Gathering the wishes&hellip;</div>
+
+  <header id="topbar">
+    <span class="wordmark">Wish Wall</span>
+    <button id="make-wish-btn" class="btn-outline">Make a wish</button>
+  </header>
+
+  <p id="hint"></p>
+
+  <div id="backdrop"></div>
+
+  <aside id="compose-panel" aria-hidden="true">
+    <button class="close-btn" id="compose-close" aria-label="Close">&times;</button>
+    <h2>Let a wish go</h2>
+    <p class="panel-sub">It'll drift into the field for someone to find.</p>
+    <label for="wish-name">Your name (optional)</label>
+    <input id="wish-name" type="text" maxlength="30" placeholder="Anonymous" />
+    <label for="wish-text">Your wish</label>
+    <textarea id="wish-text" maxlength="280" rows="4" placeholder="What are you hoping for?"></textarea>
+    <div id="compose-error" class="error-text" hidden></div>
+    <button id="release-btn" class="btn-solid">Release it</button>
+  </aside>
+
+  <aside id="view-panel" aria-hidden="true">
+    <button class="close-btn" id="view-close" aria-label="Close">&times;</button>
+    <p class="wish-meta" id="view-meta"></p>
+    <p class="wish-text" id="view-text"></p>
+    <div class="replies" id="view-replies"></div>
+    <div class="reply-compose">
+      <label for="reply-text">Write back</label>
+      <input id="reply-name" type="text" maxlength="30" placeholder="Your name (optional)" />
+      <textarea id="reply-text" maxlength="200" rows="2" placeholder="Say something encouraging&hellip;"></textarea>
+      <div id="reply-error" class="error-text" hidden></div>
+      <button id="reply-btn" class="btn-solid">Send encouragement</button>
+    </div>
+  </aside>
+
+<script>
+(function () {
+  'use strict';
+
+  var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var scene, camera, renderer, wishGroup, starField, raycaster;
+  var mouse = { x: 0, y: 0 };
+  var wishes = [];
+  var activeWish = null;
+  var clock = { start: performance.now() };
+
+  var canvasContainer = document.getElementById('canvas-container');
+  var loadingEl = document.getElementById('loading');
+  var hintEl = document.getElementById('hint');
+  var backdrop = document.getElementById('backdrop');
+
+  var makeWishBtn = document.getElementById('make-wish-btn');
+  var composePanel = document.getElementById('compose-panel');
+  var composeClose = document.getElementById('compose-close');
+  var nameInput = document.getElementById('wish-name');
+  var textInput = document.getElementById('wish-text');
+  var composeError = document.getElementById('compose-error');
+  var releaseBtn = document.getElementById('release-btn');
+
+  var viewPanel = document.getElementById('view-panel');
+  var viewClose = document.getElementById('view-close');
+  var viewMeta = document.getElementById('view-meta');
+  var viewText = document.getElementById('view-text');
+  var viewReplies = document.getElementById('view-replies');
+  var replyName = document.getElementById('reply-name');
+  var replyText = document.getElementById('reply-text');
+  var replyError = document.getElementById('reply-error');
+  var replyBtn = document.getElementById('reply-btn');
+
+  function strHash(str) {
+    var h = 0;
+    for (var i = 0; i < str.length; i++) {
+      h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+    }
+    return h;
+  }
+
+  function seededRandom(seed) {
+    var s = seed % 233280;
+    if (s < 0) s += 233280;
+    return function () {
+      s = (s * 9301 + 49297) % 233280;
+      return s / 233280;
+    };
+  }
+
+  function makeId() {
+    return 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  function timeAgo(ts) {
+    var diff = Math.max(0, Date.now() - ts);
+    var mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + (mins === 1 ? ' minute ago' : ' minutes ago');
+    var hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + (hours === 1 ? ' hour ago' : ' hours ago');
+    var days = Math.floor(hours / 24);
+    return days + (days === 1 ? ' day ago' : ' days ago');
+  }
+
+  function createGlowTexture() {
+    var size = 128;
+    var canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    var ctx = canvas.getContext('2d');
+    var gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(255,238,210,1)');
+    gradient.addColorStop(0.25, 'rgba(242,181,105,0.95)');
+    gradient.addColorStop(0.6, 'rgba(242,181,105,0.25)');
+    gradient.addColorStop(1, 'rgba(242,181,105,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  var glowTexture;
+
+  function init3D() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x08080f);
+    scene.fog = new THREE.FogExp2(0x08080f, 0.012);
+
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.set(0, 0, 60);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    canvasContainer.appendChild(renderer.domElement);
+
+    wishGroup = new THREE.Group();
+    scene.add(wishGroup);
+
+    glowTexture = createGlowTexture();
+
+    buildStarfield();
+
+    raycaster = new THREE.Raycaster();
+    raycaster.params.Sprite = { threshold: 0.5 };
+
+    window.addEventListener('resize', onResize);
+    renderer.domElement.addEventListener('click', onCanvasClick);
+    window.addEventListener('mousemove', onMouseMove);
+
+    introStart = performance.now();
+    requestAnimationFrame(animate);
+  }
+
+  function buildStarfield() {
+    var count = 900;
+    var positions = new Float32Array(count * 3);
+    for (var i = 0; i < count; i++) {
+      var r = 80 + Math.random() * 60;
+      var theta = Math.random() * Math.PI * 2;
+      var phi = Math.acos((Math.random() * 2) - 1);
+      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      positions[i * 3 + 2] = r * Math.cos(phi);
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    var mat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 0.6,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.55
+    });
+    starField = new THREE.Points(geo, mat);
+    scene.add(starField);
+  }
+
+  function positionForWish(id) {
+    var rand = seededRandom(strHash(id));
+    return {
+      x: (rand() - 0.5) * 42,
+      y: (rand() - 0.5) * 22,
+      z: (rand() - 0.5) * 30,
+      scale: 1.4 + rand() * 1.6,
+      phase: rand() * Math.PI * 2,
+      speed: 0.35 + rand() * 0.5
+    };
+  }
+
+  function addWishSprite(wish) {
+    var p = positionForWish(wish.id);
+    var material = new THREE.SpriteMaterial({
+      map: glowTexture,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    var sprite = new THREE.Sprite(material);
+    sprite.position.set(p.x, p.y, p.z);
+    sprite.scale.set(p.scale, p.scale, 1);
+    sprite.userData = {
+      wish: wish,
+      baseY: p.y,
+      phase: p.phase,
+      speed: p.speed,
+      baseOpacity: 0.75 + Math.random() * 0.2,
+      bornAt: performance.now()
+    };
+    wishGroup.add(sprite);
+    wish.mesh = sprite;
+  }
+
+  function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  function onMouseMove(e) {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  }
+
+  function onCanvasClick(e) {
+    if (document.body.classList.contains('panel-open')) return;
+    var ndc = {
+      x: (e.clientX / window.innerWidth) * 2 - 1,
+      y: -(e.clientY / window.innerHeight) * 2 + 1
+    };
+    raycaster.setFromCamera(ndc, camera);
+    var intersects = raycaster.intersectObjects(wishGroup.children);
+    if (intersects.length > 0) {
+      openViewPanel(intersects[0].object.userData.wish);
+    }
+  }
+
+  var introStart = null;
+
+  function animate() {
+    requestAnimationFrame(animate);
+    var now = performance.now();
+    var elapsed = (now - clock.start) / 1000;
+
+    if (!prefersReducedMotion) {
+      wishGroup.rotation.y += 0.0007;
+      starField.rotation.y += 0.00015;
+
+      var camTargetX = mouse.x * 3;
+      var camTargetY = mouse.y * 2;
+      camera.position.x += (camTargetX - camera.position.x) * 0.02;
+      camera.position.y += (camTargetY - camera.position.y) * 0.02;
+      camera.lookAt(0, 0, 0);
+    }
+
+    if (introStart !== null) {
+      var t = Math.min(1, (now - introStart) / 1800);
+      var eased = 1 - Math.pow(1 - t, 3);
+      camera.position.z = 95 - eased * 35;
+      if (t >= 1) introStart = null;
+    }
+
+    for (var i = 0; i < wishGroup.children.length; i++) {
+      var sprite = wishGroup.children[i];
+      var d = sprite.userData;
+      if (!prefersReducedMotion) {
+        sprite.position.y = d.baseY + Math.sin(elapsed * d.speed + d.phase) * 1.4;
+      }
+      var age = now - d.bornAt;
+      var fadeIn = Math.min(1, age / 900);
+      sprite.material.opacity = fadeIn * d.baseOpacity;
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  function updateHint() {
+    hintEl.textContent = wishes.length === 0
+      ? 'No wishes yet — be the first to let one go.'
+      : 'Click a light to read what someone let go.';
+  }
+
+  async function loadWishes() {
+    try {
+      var result = await window.storage.get('campus-wishes', true);
+      wishes = result && result.value ? JSON.parse(result.value) : [];
+    } catch (err) {
+      wishes = [];
+    }
+    wishes.forEach(function (w) {
+      if (!w.replies) w.replies = [];
+      addWishSprite(w);
+    });
+    updateHint();
+    loadingEl.classList.add('hidden');
+  }
+
+  async function saveWishes() {
+    try {
+      var res = await window.storage.set('campus-wishes', JSON.stringify(wishes), true);
+      return !!res;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function openComposePanel() {
+    document.body.classList.add('panel-open');
+    composePanel.classList.add('open');
+    composePanel.setAttribute('aria-hidden', 'false');
+    backdrop.classList.add('show');
+    composeError.hidden = true;
+    setTimeout(function () { textInput.focus(); }, 300);
+  }
+
+  function closeComposePanel() {
+    composePanel.classList.remove('open');
+    composePanel.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('panel-open');
+    backdrop.classList.remove('show');
+  }
+
+  function openViewPanel(wish) {
+    activeWish = wish;
+    document.body.classList.add('panel-open');
+    viewPanel.classList.add('open');
+    viewPanel.setAttribute('aria-hidden', 'false');
+    backdrop.classList.add('show');
+    viewMeta.textContent = (wish.name || 'Anonymous') + ' \u00b7 ' + timeAgo(wish.createdAt);
+    viewText.textContent = wish.text;
+    renderReplies(wish);
+    replyError.hidden = true;
+    setTimeout(function () { replyText.focus(); }, 300);
+  }
+
+  function closeViewPanel() {
+    viewPanel.classList.remove('open');
+    viewPanel.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('panel-open');
+    backdrop.classList.remove('show');
+    activeWish = null;
+  }
+
+  function renderReplies(wish) {
+    viewReplies.innerHTML = '';
+    if (!wish.replies || wish.replies.length === 0) {
+      var empty = document.createElement('p');
+      empty.className = 'no-replies';
+      empty.textContent = 'No one has written back yet.';
+      viewReplies.appendChild(empty);
+      return;
+    }
+    wish.replies.forEach(function (r) {
+      var item = document.createElement('div');
+      item.className = 'reply-item';
+      var meta = document.createElement('p');
+      meta.className = 'reply-meta';
+      meta.textContent = (r.name || 'Anonymous') + ' \u00b7 ' + timeAgo(r.createdAt);
+      var body = document.createElement('p');
+      body.className = 'reply-body';
+      body.textContent = r.text;
+      item.appendChild(meta);
+      item.appendChild(body);
+      viewReplies.appendChild(item);
+    });
+  }
+
+  makeWishBtn.addEventListener('click', openComposePanel);
+  composeClose.addEventListener('click', closeComposePanel);
+  viewClose.addEventListener('click', closeViewPanel);
+  backdrop.addEventListener('click', function () {
+    closeComposePanel();
+    closeViewPanel();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeComposePanel();
+      closeViewPanel();
+    }
+  });
+
+  releaseBtn.addEventListener('click', async function () {
+    var text = textInput.value.trim();
+    if (!text) {
+      composeError.textContent = 'Write something before you let it go.';
+      composeError.hidden = false;
+      return;
+    }
+    releaseBtn.disabled = true;
+    var wish = {
+      id: makeId(),
+      text: text,
+      name: nameInput.value.trim(),
+      createdAt: Date.now(),
+      replies: []
+    };
+    wishes.push(wish);
+    addWishSprite(wish);
+    var ok = await saveWishes();
+    releaseBtn.disabled = false;
+    if (!ok) {
+      composeError.textContent = "Couldn't save your wish — check your connection and try again.";
+      composeError.hidden = false;
+      return;
+    }
+    nameInput.value = '';
+    textInput.value = '';
+    updateHint();
+    closeComposePanel();
+  });
+
+  replyBtn.addEventListener('click', async function () {
+    if (!activeWish) return;
+    var text = replyText.value.trim();
+    if (!text) {
+      replyError.textContent = 'Write something before you send it.';
+      replyError.hidden = false;
+      return;
+    }
+    replyBtn.disabled = true;
+    activeWish.replies.push({
+      text: text,
+      name: replyName.value.trim(),
+      createdAt: Date.now()
+    });
+    var ok = await saveWishes();
+    replyBtn.disabled = false;
+    if (!ok) {
+      replyError.textContent = "Couldn't send that — check your connection and try again.";
+      replyError.hidden = false;
+      activeWish.replies.pop();
+      return;
+    }
+    replyName.value = '';
+    replyText.value = '';
+    renderReplies(activeWish);
+  });
+
+  init3D();
+  loadWishes();
+})();
+</script>
+</body>
+</html>
